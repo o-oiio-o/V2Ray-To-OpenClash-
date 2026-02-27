@@ -1,38 +1,57 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const { AUTH_USER, AUTH_PASS, V2_DATA } = env;
+    const { AUTH_USER, AUTH_PASS, V2_DATA, SUB_TOKEN } = env;
 
-    // --- 1. 简易登录验证逻辑 ---
-    const cookie = request.headers.get("Cookie") || "";
-    const isAuthed = cookie.includes(`auth=true`);
+    // --- 1. Security Check for Subscription ---
+    if (url.pathname === "/scfg") {
+      const token = url.searchParams.get("token");
+      const ua = request.headers.get("User-Agent") || "";
 
-    // 订阅链接接口 (无需登录，方便 OpenClash 调用)
-    if (url.pathname === "/sub") {
+      // Check 1: Token verification
+      if (!SUB_TOKEN || token !== SUB_TOKEN) {
+        return new Response("Unauthorized: Invalid Token", { status: 403 });
+      }
+
+      // Check 2: Simple UA Filter (Optional: Only allow Clash-like clients)
+      // If you want to be stricter, uncomment the lines below:
+      /*
+      if (!ua.toLowerCase().includes("clash") && !ua.toLowerCase().includes("mihomo")) {
+        return new Response("Access Denied: Please use Clash client", { status: 403 });
+      }
+      */
+
       const rawData = await V2_DATA.get("nodes_txt") || "";
       const yaml = convertToYaml(rawData, url.host);
+      
       return new Response(yaml, {
-        headers: { "Content-Type": "text/yaml; charset=utf-8" }
+        headers: { 
+          "Content-Type": "text/yaml; charset=utf-8",
+          "X-Robots-Tag": "noindex, nofollow" // Prevent search engines
+        }
       });
     }
 
-    // 登录处理
+    // --- 2. Admin Auth Logic ---
+    const cookie = request.headers.get("Cookie") || "";
+    const isAuthed = cookie.includes(`auth=true`);
+
     if (url.pathname === "/login" && request.method === "POST") {
       const formData = await request.formData();
       if (formData.get("user") === AUTH_USER && formData.get("pass") === AUTH_PASS) {
         return new Response("Login Success", {
           status: 302,
-          headers: { "Set-Cookie": "auth=true; Path=/; HttpOnly", "Location": "/" }
+          headers: { "Set-Cookie": "auth=true; Path=/; HttpOnly; SameSite=Lax", "Location": "/" }
         });
       }
       return new Response("Invalid Credentials", { status: 401 });
     }
 
     if (!isAuthed) {
-      return new Response(renderLoginPage(), { headers: { "Content-Type": "text/html" } });
+      return new Response(renderLoginPage(), { headers: { "Content-Type": "text/html; charset=utf-8" } });
     }
 
-    // --- 2. 管理页面逻辑 ---
+    // --- 3. Admin Logic ---
     if (url.pathname === "/save" && request.method === "POST") {
       const formData = await request.formData();
       const content = formData.get("content");
@@ -40,20 +59,22 @@ export default {
       return new Response("Saved", { status: 302, headers: { "Location": "/" } });
     }
 
-    // 主页：编辑节点
     const currentNodes = await V2_DATA.get("nodes_txt") || "";
-    const subUrl = `${url.protocol}//${url.host}/sub`;
+    // Display Sub URL with Token
+    const subUrl = `${url.protocol}//${url.host}/sub?token=${SUB_TOKEN || 'SET_YOUR_TOKEN_IN_ENV'}`;
+    
     return new Response(renderAdminPage(currentNodes, subUrl), {
-      headers: { "Content-Type": "text/html" }
+      headers: { "Content-Type": "text/html; charset=utf-8" }
     });
   }
 };
 
-// --- 3. 转换逻辑 (V2Ray TXT -> Clash YAML) ---
+
+// --- 3. Conversion Logic (V2Ray TXT -> Clash YAML) ---
 function convertToYaml(txt, host) {
   let content = txt.trim();
-  // Base64 解码处理
-  if (!content.startsWith("vmess://") && !content.startsWith("vless://")) {
+  // Base64 Decode
+  if (!content.startsWith("vmess://") && !content.startsWith("vless://") && !content.startsWith("ss://") && !content.startsWith("trojan://")) {
     try { content = atob(content); } catch (e) {}
   }
 
@@ -81,7 +102,7 @@ function convertToYaml(txt, host) {
           network: data.net || "tcp",
           "ws-opts": data.net === "ws" ? { path: data.path || "/", headers: { Host: data.host || "" } } : undefined
         };
-      } else if (line.startsWith("vless://") || line.startsWith("trojan://")) {
+      } else if (line.startsWith("vless://") || line.startsWith("trojan://") || line.startsWith("ss://")) {
         const url = new URL(line);
         const protocol = line.split("://")[0];
         proxy = {
@@ -90,8 +111,8 @@ function convertToYaml(txt, host) {
           server: url.hostname,
           port: parseInt(url.port),
           uuid: protocol === "vless" ? url.username : undefined,
-          password: protocol === "trojan" ? url.username : undefined,
-          tls: true,
+          password: (protocol === "trojan" || protocol === "ss") ? url.username : undefined,
+          tls: protocol !== "ss",
           "skip-cert-verify": true,
           sni: url.searchParams.get("sni") || url.hostname,
           network: url.searchParams.get("type") || "tcp"
@@ -102,7 +123,6 @@ function convertToYaml(txt, host) {
       }
 
       if (proxy) {
-        // 重名去重逻辑
         if (nameCounter[proxy.name] !== undefined) {
           nameCounter[proxy.name]++;
           proxy.name = `${proxy.name}_${nameCounter[proxy.name]}`;
@@ -114,7 +134,6 @@ function convertToYaml(txt, host) {
     } catch (e) {}
   });
 
-  // 构建简易 YAML 字符串 (避免引入大型库)
   const proxyList = proxies.map(p => `  - ${JSON.stringify(p)}`).join("\n");
   const names = proxies.map(p => `      - "${p.name}"`).join("\n");
 
@@ -132,12 +151,12 @@ proxies:
 ${proxyList}
 
 proxy-groups:
-  - name: 🚀 节点选择
+  - name: 🚀 Proxy Select
     type: select
     proxies:
-      - ⚡ 自动选择
+      - ⚡ Auto Select
 ${names}
-  - name: ⚡ 自动选择
+  - name: ⚡ Auto Select
     type: url-test
     url: http://www.gstatic.com/generate_204
     interval: 300
@@ -146,44 +165,46 @@ ${names}
 
 rules:
   - GEOIP,CN,DIRECT
-  - MATCH,🚀 节点选择
+  - MATCH,🚀 Proxy Select
 `;
 }
 
-// --- 4. 页面模板 ---
+// --- 4. Page Templates (English Version) ---
 function renderLoginPage() {
-  return `<!DOCTYPE html><html><head><title>Login</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script></head>
+  return `<!DOCTYPE html><html><head><title>Login</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script></head>
   <body class="bg-gray-100 flex items-center justify-center h-screen">
     <form action="/login" method="POST" class="bg-white p-8 rounded shadow-md w-80">
       <h2 class="text-xl font-bold mb-4">Node Manager Login</h2>
-      <input type="text" name="user" placeholder="Username" class="w-full border p-2 mb-2 rounded">
-      <input type="password" name="pass" placeholder="Password" class="w-full border p-2 mb-4 rounded">
-      <button class="w-full bg-blue-500 text-white py-2 rounded">Login</button>
+      <input type="text" name="user" placeholder="Username" class="w-full border p-2 mb-2 rounded shadow-sm">
+      <input type="password" name="pass" placeholder="Password" class="w-full border p-2 mb-4 rounded shadow-sm">
+      <button class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded transition">Login</button>
     </form>
   </body></html>`;
 }
 
 function renderAdminPage(content, subUrl) {
-  return `<!DOCTYPE html><html><head><title>Node Manager</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script></head>
+  return `<!DOCTYPE html><html><head><title>Node Manager</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><script src="https://cdn.tailwindcss.com"></script></head>
   <body class="bg-gray-50 p-4">
     <div class="max-w-4xl mx-auto">
-      <h1 class="text-2xl font-bold mb-4">V2Ray 节点列表管理</h1>
+      <h1 class="text-2xl font-bold mb-4">V2Ray Node List Management</h1>
       <form action="/save" method="POST">
-        <textarea name="content" class="w-full h-96 p-4 border rounded mb-4 font-mono text-sm" placeholder="粘贴 vmess:// vless:// 链接，每行一个">${content}</textarea>
+        <textarea name="content" class="w-full h-96 p-4 border rounded mb-4 font-mono text-sm shadow-sm focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Paste vmess:// vless:// ss:// trojan:// links here...">${content}</textarea>
         <div class="flex gap-4 mb-8">
-          <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded shadow">保存并更新订阅</button>
-          <button type="button" onclick="copySub()" class="bg-blue-600 text-white px-6 py-2 rounded shadow">复制订阅链接</button>
+          <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded shadow transition font-medium">Save & Update Sub</button>
+          <button type="button" onclick="copySub()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded shadow transition font-medium">Copy Sub URL</button>
         </div>
       </form>
-      <div class="bg-gray-200 p-4 rounded break-all">
-        <p class="text-sm font-bold">当前订阅链接：</p>
-        <code id="subUrl">${subUrl}</code>
+      <div class="bg-gray-200 p-4 rounded-lg border border-gray-300">
+        <p class="text-sm font-bold text-gray-700 mb-1">Subscription URL:</p>
+        <code id="subUrl" class="text-blue-700 break-all text-sm">${subUrl}</code>
       </div>
     </div>
     <script>
       function copySub() {
-        navigator.clipboard.writeText("${subUrl}");
-        alert("订阅链接已复制！请粘贴到 OpenClash 订阅地址中。");
+        const url = document.getElementById('subUrl').innerText;
+        navigator.clipboard.writeText(url).then(() => {
+          alert("URL copied to clipboard!");
+        });
       }
     </script>
   </body></html>`;
