@@ -14,10 +14,11 @@
 
 ---
 
-## Step 3: Deployment Steps
+## Step 3: CF Deployment
 
 1. **Upload Code:**
-   - Upload `_worker.js` to your GitHub repository, or upload directly via the Cloudflare Pages dashboard.
+   - CF Pages: Fork my repository to your GitHub, then import this GitHub repository into CF Pages.
+   - CF Workers: Create a new CF Worker starting with "Hello World!", then replace the Worker code with the code from _worker.js.
 
 2. **Bind KV Namespace (Critical):**
    - Go to your Pages project → Settings → Functions.
