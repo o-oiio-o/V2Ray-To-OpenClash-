@@ -10,6 +10,7 @@
    - In your Pages project settings, add the following environment variables:
      - `AUTH_USER`: Set your login username.
      - `AUTH_PASS`: Set your login password.
+     - `SUB_TOKEN`: Your subscription key (e.g., secret888).
 
 ---
 
@@ -51,7 +52,16 @@
 4. **OpenClash Optimization:**  
    The generated YAML includes `external-controller: 0.0.0.0:9090`, ensuring the control panel can be accessed directly.
 
----
+5. **Enhanced Security：**
+   The environment variable `SUB_TOKEN` is applied to the subscription link. You can also customize the subscription path by modifying `/scfg` in the following:
+
+```javascript
+// 1. Define your custom path here  
+const mySubPath = "/scfg";
+```
+
+Subscription address structure:  
+https://Url+mySubPath+token
 
 ## Tip
 
