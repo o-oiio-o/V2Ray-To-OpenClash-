@@ -3,8 +3,11 @@ export default {
     const url = new URL(request.url);
     const { AUTH_USER, AUTH_PASS, V2_DATA, SUB_TOKEN } = env;
 
+    // 1. Define your custom path here
+    const mySubPath = "/scfg";
+
     // --- 1. Security Check for Subscription ---
-    if (url.pathname === "/scfg") {
+    if (url.pathname === mySubPath) {
       const token = url.searchParams.get("token");
       const ua = request.headers.get("User-Agent") || "";
 
@@ -61,7 +64,7 @@ export default {
 
     const currentNodes = await V2_DATA.get("nodes_txt") || "";
     // Display Sub URL with Token
-    const subUrl = `${url.protocol}//${url.host}/sub?token=${SUB_TOKEN || 'SET_YOUR_TOKEN_IN_ENV'}`;
+    const subUrl = `${url.protocol}//${url.host}${mySubPath}?token=${SUB_TOKEN || 'SET_YOUR_TOKEN_IN_ENV'}`;
     
     return new Response(renderAdminPage(currentNodes, subUrl), {
       headers: { "Content-Type": "text/html; charset=utf-8" }
@@ -209,3 +212,4 @@ function renderAdminPage(content, subUrl) {
     </script>
   </body></html>`;
 }
+
