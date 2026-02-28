@@ -4,7 +4,7 @@
 
 1. **Create a KV Namespace:**
    - Log in to the Cloudflare Dashboard → Storage & Databases → Workers KV.
-   - Create a new namespace, e.g., name it `V2r_DATA`.
+   - Create a new KV namespace,the name can be anything.
 
 2. **Set Environment Variables:**
    - In your project settings, add the following environment variables:
