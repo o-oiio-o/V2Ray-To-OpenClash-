@@ -1,4 +1,4 @@
-# Deployment Guide for Cloudflare Pages + KV Setup
+# Deployment Guide for Cloudflare + KV Setup
 
 ## Step 1: Preparation
 
