@@ -4,10 +4,10 @@
 
 1. **Create a KV Namespace:**
    - Log in to the Cloudflare Dashboard → Storage & Databases → Workers KV.
-   - Create a new namespace, e.g., name it `V2_DATA`.
+   - Create a new namespace, e.g., name it `V2r_DATA`.
 
 2. **Set Environment Variables:**
-   - In your Pages project settings, add the following environment variables:
+   - In your project settings, add the following environment variables:
      - `AUTH_USER`: Set your login username.
      - `AUTH_PASS`: Set your login password.
      - `SUB_TOKEN`: Your subscription key (e.g., secret888).
@@ -21,7 +21,7 @@
    - CF Workers: Create a new CF Worker starting with "Hello World!", then replace the Worker code with the code from _worker.js.
 
 2. **Bind KV Namespace (Critical):**
-   - Go to your Pages project → Settings → Functions.
+   - Go to your project → Settings → bindings.
    - Find the KV namespace bindings section.
    - Click "Add Binding":
      - Variable name must be: `V2_DATA`
@@ -60,9 +60,6 @@
 // 1. Define your custom path here  
 const mySubPath = "/scfg";
 ```
-
-Subscription address structure:  
-https://Url+mySubPath+token
 
 ## Tip
 
